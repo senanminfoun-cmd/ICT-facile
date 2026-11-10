@@ -10,6 +10,6 @@ Application mobile (PWA) pour mesurer l'index cardio-thoracique (ICT) sur la pho
 **Outil d'aide à la mesure, non certifié comme dispositif médical.** Le radiologue reste seul responsable de l'interprétation.
 
 ## Installer
-Ouvrir https://senanminfoun-cmd.github.io/ict-facile/ puis :
+Ouvrir https://senanminfoun-cmd.github.io/ICT-facile/ puis :
 - Android (Chrome) : menu ⋮ → « Installer l'application » / « Ajouter à l'écran d'accueil ».
 - iPhone (Safari) : bouton Partager → « Sur l'écran d'accueil ».
