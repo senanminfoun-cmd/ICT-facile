@@ -1,0 +1,490 @@
+<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#0d1215"><link rel="manifest" href="manifest.json"><link rel="apple-touch-icon" href="icon-180.png"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="ICT Facile"><style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}[hidden]{display:none!important}img{max-width:100%}</style>
+<title>ICT Facile</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: one column "reading-room" tool: film viewer on top, measurement sheet below. Dark-first like a reading room. */
+:root{
+  --bg:#0d1215; --surface:#151c20; --surface2:#1c252a; --line:#28343b;
+  --fg:#e5ecef; --muted:#8b9ba3; --accent:#3fc1d9;
+  --cardiac:#f2a93b; --thorax:#3fc1d9;
+  --good:#47c287; --warn:#e5b13a; --crit:#ef6b5b;
+  --font:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  color-scheme:dark;
+}
+@media (prefers-color-scheme: light){:root:not([data-theme="dark"]){
+  --bg:#eef2f4; --surface:#ffffff; --surface2:#f4f7f8; --line:#d3dce0;
+  --fg:#0f181c; --muted:#56666e; --accent:#0a7f97;
+  --cardiac:#b56a00; --thorax:#0a7f97;
+  --good:#1f8a56; --warn:#9a6c00; --crit:#c2382a; color-scheme:light}}
+:root[data-theme="light"]{
+  --bg:#eef2f4; --surface:#ffffff; --surface2:#f4f7f8; --line:#d3dce0;
+  --fg:#0f181c; --muted:#56666e; --accent:#0a7f97;
+  --cardiac:#b56a00; --thorax:#0a7f97;
+  --good:#1f8a56; --warn:#9a6c00; --crit:#c2382a; color-scheme:light}
+
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--font);font-size:15px;line-height:1.45;margin:0;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0 32px}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
+.wrap{max-width:760px;margin:0 auto;display:flex;flex-direction:column;gap:14px}
+header{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);display:flex;align-items:center;justify-content:space-between;gap:12px;padding-block:12px 8px;border-bottom:1px solid var(--line)}
+.brand{display:flex;align-items:baseline;gap:8px}
+.brand b{font-size:19px;font-weight:700;letter-spacing:-.01em}
+.row.hdr{flex-wrap:nowrap;gap:8px}
+@media (max-width:440px){.brand span{display:none}}
+.brand span{font-family:var(--mono);font-size:11px;color:var(--muted);letter-spacing:.06em;text-transform:uppercase}
+button,select,label.btn{font:inherit;color:inherit}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;padding:0 14px;border-radius:10px;border:1px solid var(--line);background:var(--surface2);cursor:pointer;font-weight:500;text-align:center}
+.btn:focus-visible,select:focus-visible,input:focus-visible+span{outline:2px solid var(--accent);outline-offset:2px}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--bg);font-weight:600}
+.btn.small{min-height:36px;padding:0 10px;font-size:13px}
+.btn[aria-pressed="true"]{border-color:var(--accent);color:var(--accent)}
+.btn svg{width:18px;height:18px;flex:none}
+.add{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.add input{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+.viewer{position:relative;background:#000;border-radius:12px;overflow:hidden;display:flex;justify-content:center;border:1px solid var(--line)}
+.stage{position:relative;max-width:100%}
+.stage canvas{display:block;max-width:100%}
+#ov{position:absolute;inset:0;touch-action:none}
+#loupe{position:absolute;top:8px;left:8px;width:120px;height:120px;border-radius:50%;border:2px solid #fff;box-shadow:0 2px 10px rgba(0,0,0,.6);pointer-events:none}
+.tag{position:absolute;top:8px;right:8px;font-family:var(--mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;background:rgba(0,0,0,.65);color:#fff;padding:4px 8px;border-radius:6px}
+.tools{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.tools .grow{flex:1}
+.range{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted)}
+.range input{width:110px;accent-color:var(--accent)}
+.hint{font-size:13px;color:var(--muted);margin:0}
+.result{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:14px}
+.top{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px}
+.ict{display:flex;flex-direction:column;gap:2px}
+.ict small{font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.ict output{font-family:var(--mono);font-size:44px;font-weight:600;line-height:1;font-variant-numeric:tabular-nums}
+.ict output.unreliable{color:var(--muted);text-decoration:line-through;text-decoration-thickness:2px}
+.pill{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;font-size:13px;font-weight:600;border:1px solid currentColor}
+.pill.good{color:var(--good)} .pill.warn{color:var(--warn)} .pill.crit{color:var(--crit)} .pill.muted{color:var(--muted)}
+.dims{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+@media (min-width:560px){.dims{grid-template-columns:repeat(4,minmax(0,1fr))}}
+.dim em{font-style:normal;font-family:var(--mono);font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+.calib{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end}
+.calib input[type=number]{min-height:44px;width:110px;border-radius:10px;border:1px solid var(--line);background:var(--surface2);padding:0 10px;font:inherit;color:inherit}
+.dim{background:var(--surface2);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:2px;min-width:0}
+.dim small{font-size:12px;color:var(--muted)}
+.dim b{font-family:var(--mono);font-size:17px;font-variant-numeric:tabular-nums}
+.dim i{font-style:normal;display:inline-block;width:10px;height:3px;border-radius:2px;vertical-align:middle;margin-right:6px}
+.alerts{display:flex;flex-direction:column;gap:6px;margin:0;padding:0;list-style:none}
+.alerts li{font-size:14px;padding:8px 10px;border-radius:8px;border-left:3px solid var(--warn);background:var(--surface2)}
+.alerts li.block{border-left-color:var(--crit)}
+.alerts li.ok{border-left-color:var(--good)}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.field{display:flex;flex-direction:column;gap:4px;flex:1;min-width:200px}
+.field>span{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;font-family:var(--mono)}
+select{min-height:44px;border-radius:10px;border:1px solid var(--line);background:var(--surface2);padding:0 10px}
+.checks{display:flex;flex-wrap:wrap;gap:8px}
+.check{display:inline-flex;align-items:center;gap:8px;padding:8px 10px;border-radius:10px;border:1px solid var(--line);background:var(--surface2);font-size:14px;cursor:pointer}
+.check input{accent-color:var(--accent);width:18px;height:18px;margin:0}
+h2{font-size:15px;margin:0;font-weight:600;text-wrap:balance}
+.legal{font-size:12px;color:var(--muted);margin:0}
+dialog{border:1px solid var(--line);border-radius:14px;background:var(--surface);color:var(--fg);padding:0;width:min(560px,calc(100vw - 32px));max-height:80vh}
+dialog::backdrop{background:rgba(0,0,0,.55)}
+.dlg{display:flex;flex-direction:column;gap:12px;padding:16px}
+.dlg-head{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.hist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px;overflow:auto;max-height:52vh}
+.hist li{display:grid;grid-template-columns:56px minmax(0,1fr) auto;gap:10px;align-items:center;padding:8px;border-radius:10px;background:var(--surface2)}
+.hist img{width:56px;height:56px;object-fit:cover;border-radius:6px;background:#000}
+.hist b{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.hist small{display:block;color:var(--muted);font-size:12px}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:10px 16px;border-radius:10px;font-weight:500;z-index:20;max-width:calc(100vw - 32px)}
+.steps{margin:0;padding-left:20px;font-size:14px;display:flex;flex-direction:column;gap:4px}
+@media (prefers-reduced-motion:no-preference){.btn{transition:background .15s,border-color .15s}}
+</style>
+</head><body>
+
+<div class="wrap">
+  <header>
+    <div class="brand"><b>ICT Facile</b><span>Index cardio-thoracique</span></div>
+    <div class="row hdr">
+      <button class="btn small" id="helpBtn" type="button">Aide</button>
+      <button class="btn small" id="histBtn" type="button">Historique</button>
+    </div>
+  </header>
+
+  <div class="add">
+    <label class="btn primary" for="camIn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>
+      Prendre une photo
+      <input id="camIn" type="file" accept="image/*" capture="environment">
+    </label>
+    <label class="btn" for="galIn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="m3 16 5-5 4 4 3-3 6 6"/></svg>
+      Galerie
+      <input id="galIn" type="file" accept="image/*">
+    </label>
+  </div>
+
+  <div class="viewer" id="viewer">
+    <div class="stage" id="stage">
+      <canvas id="img"></canvas>
+      <canvas id="ov" aria-label="Radiographie avec les diamètres mesurés. Faites glisser les points pour corriger."></canvas>
+      <canvas id="loupe" width="240" height="240" hidden></canvas>
+      <span class="tag" id="tag">Exemple : radio synthétique</span>
+    </div>
+  </div>
+
+  <div class="tools">
+    <button class="btn small" id="maskBtn" type="button" aria-pressed="false">Masquer un nom</button>
+    <button class="btn small" id="undoMask" type="button">Annuler masque</button>
+    <button class="btn small" id="invBtn" type="button" aria-pressed="false">Inverser</button>
+    <label class="range" for="contrast">Contraste <input id="contrast" type="range" min="60" max="220" value="100"></label>
+    <span class="grow"></span>
+    <button class="btn small" id="resetPts" type="button">Replacer les points</button>
+  </div>
+  <p class="hint" id="hint">Faites glisser les 6 points : ligne médiane (M), bords du cœur (C-D, C-G) et bords internes du thorax (T-D, T-G). La droite du patient est à gauche de l'image.</p>
+
+  <section class="result" aria-live="polite">
+    <div class="top">
+      <div class="ict"><small>ICT</small><output id="ictOut">0,55</output></div>
+      <span class="pill" id="verdict">…</span>
+    </div>
+    <div class="dims">
+      <div class="dim"><small><i style="background:var(--cardiac)"></i>Cœur droit</small><b id="dR">–</b><em id="pR"></em></div>
+      <div class="dim"><small><i style="background:var(--cardiac)"></i>Cœur gauche</small><b id="dL">–</b><em id="pL"></em></div>
+      <div class="dim"><small><i style="background:var(--cardiac)"></i>Cœur total</small><b id="dC">–</b><em id="pC"></em></div>
+      <div class="dim"><small><i style="background:var(--thorax)"></i>Thorax</small><b id="dT">–</b><em id="pT"></em></div>
+    </div>
+    <div class="calib">
+      <label class="field" for="filmSel"><span>Calibrage en mm (points F)</span>
+        <select id="filmSel">
+          <option value="350">Largeur du film 35 × 43 cm (350 mm)</option>
+          <option value="430">Largeur du film 43 × 35 cm (430 mm)</option>
+          <option value="300">Largeur du film 30 × 40 cm (300 mm)</option>
+          <option value="240">Largeur du film 24 × 30 cm (240 mm)</option>
+          <option value="180">Largeur du film 18 × 24 cm (180 mm)</option>
+          <option value="custom">Autre repère (règle…)</option>
+        </select>
+      </label>
+      <label class="field" for="refMm" id="refWrap" hidden style="flex:0 0 auto;min-width:0"><span>Longueur (mm)</span><input type="number" id="refMm" min="10" max="600" step="1" value="100" inputmode="numeric"></label>
+    </div>
+    <ul class="alerts" id="alerts"></ul>
+    <div class="row">
+      <label class="field" for="profile"><span>Patient (clichés de face PA uniquement)</span>
+        <select id="profile">
+          <option value="adPA">Adulte, face PA</option>
+          <option value="child">Enfant de plus de 2 ans, face PA</option>
+        </select>
+      </label>
+    </div>
+    <div class="field"><span>Qualité du cliché</span>
+      <div class="checks">
+        <label class="check" for="qInsp"><input type="checkbox" id="qInsp" checked> Inspiration suffisante</label>
+        <label class="check" for="qRot"><input type="checkbox" id="qRot" checked> Pas de rotation</label>
+        <label class="check" for="qCont"><input type="checkbox" id="qCont" checked> Contours du cœur visibles</label>
+      </div>
+    </div>
+    <div class="row">
+      <button class="btn primary" id="saveBtn" type="button">Enregistrer la mesure</button>
+    </div>
+    <p class="legal">Outil d'aide à la mesure, non certifié comme dispositif médical. Le radiologue reste seul responsable de l'interprétation. Les seuils affichés sont indicatifs.</p>
+  </section>
+</div>
+
+<dialog id="histDlg">
+  <div class="dlg">
+    <div class="dlg-head"><h2>Mesures enregistrées</h2><button class="btn small" type="button" data-close>Fermer</button></div>
+    <p class="hint">Stockées uniquement sur ce téléphone, noms masqués. Elles serviront à entraîner l'IA.</p>
+    <ul class="hist" id="histList"></ul>
+    <div class="row" id="exportRow">
+      <button class="btn small" id="exportBtn" type="button">Exporter les annotations (JSON)</button>
+    </div>
+  </div>
+</dialog>
+
+<dialog id="helpDlg">
+  <div class="dlg">
+    <div class="dlg-head"><h2>Comment mesurer</h2><button class="btn small" type="button" data-close>Fermer</button></div>
+    <ol class="steps">
+      <li>Photographiez le film bien de face, en remplissant l'écran, sans reflet du négatoscope.</li>
+      <li>Masquez le nom du patient avec « Masquer un nom » : tracez un rectangle sur l'étiquette.</li>
+      <li>Placez les deux points M sur la ligne des épineuses (ligne médiane). Elle peut être inclinée si la photo l'est.</li>
+      <li>Placez C-D et C-G sur le point le plus éloigné de la ligne médiane, de chaque côté du cœur.</li>
+      <li>Placez T-D et T-G sur le bord interne des côtes, là où le thorax est le plus large (souvent au niveau des coupoles).</li>
+      <li>Pour avoir les mm : choisissez le format du film et placez les deux points F sur ses bords gauche et droit (ou sur les extrémités d'une règle, avec « Autre repère »).</li>
+      <li>ICT = (distance C-D + distance C-G) / distance T-D–T-G, mesurées perpendiculairement à la ligne médiane.</li>
+    </ol>
+    <p class="hint">Pendant le déplacement d'un point, une loupe montre la zone sous votre doigt.</p>
+  </div>
+</dialog>
+
+<div class="toast" id="toast" hidden></div>
+
+<script>
+(()=>{
+const $=s=>document.querySelector(s);
+const imgC=$('#img'), ov=$('#ov'), loupe=$('#loupe'), stage=$('#stage');
+const ictx=imgC.getContext('2d'), octx=ov.getContext('2d'), lctx=loupe.getContext('2d');
+const COL={mid:'#f4f4f4',card:'#ffb43c',thor:'#3fd0ea',film:'#c9a7ff',mask:'#000'};
+const LABEL={m1:'M',m2:'M',hr:'C-D',hl:'C-G',tr:'T-D',tl:'T-G',f1:'F',f2:'F'};
+const LEFTLBL=new Set(['hr','tr','f1']);
+const PROFILES={
+  adPA:{t:.50,name:'adulte PA'},
+  adAP:{t:.55,name:'adulte AP',note:"En incidence AP couché, l'agrandissement du cœur surestime l'ICT. Seuil indicatif 0,55 ; une valeur élevée doit être confirmée."},
+  child:{t:.50,name:'enfant'},
+  inf:{t:.55,name:'nourrisson'},
+  nn:{t:.60,name:'nouveau-né',note:"Chez le nouveau-né, le thymus peut élargir la silhouette cardio-médiastinale et fausser l'ICT."}
+};
+let S={src:null,W:0,H:0,pts:{},moved:new Set(),masks:[],sample:true,stats:null,scale:1,recordId:null};
+let drag=null, maskMode=false, invert=false;
+
+const isFramed=(()=>{try{return window.self!==window.top}catch(e){return true}})();
+function toast(msg){const t=$('#toast');t.textContent=msg;t.hidden=false;clearTimeout(toast.h);toast.h=setTimeout(()=>t.hidden=true,2600)}
+function fmt(x,d=2){return Number.isFinite(x)?x.toFixed(d).replace('.',','):'–'}
+
+/* ---------- Synthetic sample film ---------- */
+function makeSample(){
+  const W=900,H=1000,c=document.createElement('canvas');c.width=W;c.height=H;const g=c.getContext('2d');
+  g.fillStyle='#070707';g.fillRect(0,0,W,H);
+  const blob=(x,y,rx,ry,col,soft)=>{g.save();g.translate(x,y);g.scale(rx,ry);const gr=g.createRadialGradient(0,0,0,0,0,1);gr.addColorStop(0,col);gr.addColorStop(soft,col);gr.addColorStop(1,'rgba(0,0,0,0)');g.fillStyle=gr;g.beginPath();g.arc(0,0,1,0,7);g.fill();g.restore()};
+  blob(450,560,420,500,'#5c5c5c',.85);
+  blob(300,470,155,300,'#161616',.8);blob(600,470,155,300,'#161616',.8);
+  g.fillStyle='rgba(200,200,200,.75)';g.fillRect(420,60,60,940);
+  blob(475,640,170,140,'#cfcfcf',.9);
+  g.fillStyle='#8c8c8c';g.beginPath();g.moveTo(120,1000);g.quadraticCurveTo(290,700,450,800);g.quadraticCurveTo(620,720,780,1000);g.fill();
+  g.strokeStyle='rgba(225,225,225,.33)';g.lineWidth=11;
+  for(let i=0;i<10;i++){const y=210+i*58;
+    g.beginPath();g.moveTo(430,y);g.quadraticCurveTo(170,y-40-i*2,160,y+70);g.stroke();
+    g.beginPath();g.moveTo(470,y);g.quadraticCurveTo(730,y-40-i*2,740,y+70);g.stroke();}
+  g.lineWidth=16;g.strokeStyle='rgba(235,235,235,.6)';
+  g.beginPath();g.moveTo(420,170);g.quadraticCurveTo(280,150,170,190);g.stroke();
+  g.beginPath();g.moveTo(480,170);g.quadraticCurveTo(620,150,730,190);g.stroke();
+  const id=g.getImageData(0,0,W,H),d=id.data;for(let i=0;i<d.length;i+=4){const n=(Math.random()-.5)*18;d[i]+=n;d[i+1]+=n;d[i+2]+=n}g.putImageData(id,0,0);
+  g.fillStyle='rgba(255,255,255,.85)';g.font='bold 26px monospace';g.fillText('R',40,60);
+  return c;
+}
+
+/* ---------- Image loading ---------- */
+function defaultPts(W,H){return{m1:{x:.5*W,y:.1*H},m2:{x:.5*W,y:.92*H},hr:{x:.38*W,y:.64*H},hl:{x:.68*W,y:.68*H},tr:{x:.13*W,y:.66*H},tl:{x:.87*W,y:.66*H},f1:{x:.04*W,y:.05*H},f2:{x:.96*W,y:.05*H}}}
+function setImage(src,opts={}){
+  S.src=src;S.W=src.naturalWidth||src.width;S.H=src.naturalHeight||src.height;
+  S.masks=[];S.sample=!!opts.sample;S.recordId=opts.recordId||null;
+  S.pts=Object.assign(defaultPts(S.W,S.H),opts.pts||{});
+  S.moved=new Set(opts.pts?Object.keys(opts.pts):[]);
+  S.stats=imageStats(src);
+  $('#tag').hidden=!S.sample;
+  $('#tag').textContent='Exemple : radio synthétique';
+  layout();
+}
+function imageStats(src){
+  const c=document.createElement('canvas');c.width=c.height=64;const g=c.getContext('2d');g.drawImage(src,0,0,64,64);
+  const d=g.getImageData(0,0,64,64).data;let s=0,s2=0,n=0;
+  for(let i=0;i<d.length;i+=4){const l=.299*d[i]+.587*d[i+1]+.114*d[i+2];s+=l;s2+=l*l;n++}
+  const m=s/n;return{mean:m,std:Math.sqrt(Math.max(0,s2/n-m*m))};
+}
+function loadFile(file){
+  if(!file)return;
+  const url=URL.createObjectURL(file),im=new Image();
+  im.onload=()=>{
+    // Downscale very large photos so the phone stays fast.
+    const max=2000,k=Math.min(1,max/Math.max(im.naturalWidth,im.naturalHeight));
+    const c=document.createElement('canvas');c.width=Math.round(im.naturalWidth*k);c.height=Math.round(im.naturalHeight*k);
+    c.getContext('2d').drawImage(im,0,0,c.width,c.height);URL.revokeObjectURL(url);
+    setImage(c,{});toast('Photo chargée. Masquez le nom puis placez les points.');
+  };
+  im.onerror=()=>toast("Impossible de lire cette image. Essayez une photo JPEG ou PNG.");
+  im.src=url;
+}
+$('#camIn').addEventListener('change',e=>{loadFile(e.target.files[0]);e.target.value=''});
+$('#galIn').addEventListener('change',e=>{loadFile(e.target.files[0]);e.target.value=''});
+
+/* ---------- Layout & drawing ---------- */
+function layout(){
+  const vw=$('#viewer').clientWidth||600, maxH=Math.max(320,window.innerHeight*.62);
+  const s=Math.min(vw/S.W,maxH/S.H);S.scale=s;
+  const w=Math.round(S.W*s),h=Math.round(S.H*s),dpr=window.devicePixelRatio||1;
+  for(const c of[imgC,ov]){c.style.width=w+'px';c.style.height=h+'px';c.width=Math.round(w*dpr);c.height=Math.round(h*dpr)}
+  stage.style.width=w+'px';stage.style.height=h+'px';
+  drawImage();draw();
+}
+function filterStr(){return `contrast(${$('#contrast').value}%)${invert?' invert(1)':''}`}
+function drawImage(){
+  const dpr=window.devicePixelRatio||1;ictx.setTransform(1,0,0,1,0,0);ictx.clearRect(0,0,imgC.width,imgC.height);
+  ictx.drawImage(S.src,0,0,imgC.width,imgC.height);
+  imgC.style.filter=filterStr();
+}
+function geom(){
+  const P=S.pts;let a=P.m1,b=P.m2;if(a.y>b.y)[a,b]=[b,a];
+  const L=Math.hypot(b.x-a.x,b.y-a.y)||1,dir={x:(b.x-a.x)/L,y:(b.y-a.y)/L},u={x:dir.y,y:-dir.x};
+  const d=p=>(p.x-a.x)*u.x+(p.y-a.y)*u.y;
+  const foot=p=>{const t=(p.x-a.x)*dir.x+(p.y-a.y)*dir.y;return{x:a.x+dir.x*t,y:a.y+dir.y*t}};
+  const dR=d(P.hr),dL=d(P.hl),dTR=d(P.tr),dTL=d(P.tl);
+  const card=Math.abs(dR)+Math.abs(dL),thor=Math.abs(dTL-dTR);
+  const tilt=Math.abs(Math.atan2(dir.x,dir.y)*180/Math.PI);
+  const ref=$('#filmSel').value==='custom'?+$('#refMm').value:+$('#filmSel').value;
+  const fpx=$('#filmSel').value==='custom'?Math.hypot(P.f2.x-P.f1.x,P.f2.y-P.f1.y):Math.abs(d(P.f2)-d(P.f1));
+  const mmpx=(ref>0&&fpx>5)?ref/fpx:NaN;
+  return{a,b,dir,u,foot,dR,dL,dTR,dTL,card,thor,ict:card/thor,tilt,mmpx,ref};
+}
+function draw(){
+  const s=S.scale,dpr=window.devicePixelRatio||1,G=geom(),P=S.pts;
+  octx.setTransform(dpr*s,0,0,dpr*s,0,0);octx.clearRect(0,0,S.W,S.H);
+  octx.fillStyle=COL.mask;for(const m of S.masks)octx.fillRect(m.x,m.y,m.w,m.h);
+  if(drag&&drag.type==='mask'){octx.fillStyle='rgba(0,0,0,.7)';const m=drag.rect;octx.fillRect(m.x,m.y,m.w,m.h)}
+  const lw=2.2/s;
+  // midline extended
+  octx.setLineDash([8/s,6/s]);octx.strokeStyle=COL.mid;octx.lineWidth=lw*.8;
+  const ext=Math.max(S.W,S.H);octx.beginPath();octx.moveTo(G.a.x-G.dir.x*ext,G.a.y-G.dir.y*ext);octx.lineTo(G.a.x+G.dir.x*ext,G.a.y+G.dir.y*ext);octx.stroke();octx.setLineDash([]);
+  const seg=(p,q,c,w)=>{octx.strokeStyle='rgba(0,0,0,.6)';octx.lineWidth=w+2.5/s;octx.beginPath();octx.moveTo(p.x,p.y);octx.lineTo(q.x,q.y);octx.stroke();octx.strokeStyle=c;octx.lineWidth=w;octx.beginPath();octx.moveTo(p.x,p.y);octx.lineTo(q.x,q.y);octx.stroke()};
+  seg(P.hr,G.foot(P.hr),COL.card,lw*1.3);seg(P.hl,G.foot(P.hl),COL.card,lw*1.3);
+  // thoracic line drawn perpendicular to midline, at the height of T-D
+  const tl2={x:P.tr.x+G.u.x*(G.dTL-G.dTR),y:P.tr.y+G.u.y*(G.dTL-G.dTR)};
+  seg(P.tr,tl2,COL.thor,lw*1.3);
+  if(Math.hypot(tl2.x-P.tl.x,tl2.y-P.tl.y)>2/s){octx.setLineDash([4/s,4/s]);octx.strokeStyle=COL.thor;octx.lineWidth=lw*.7;octx.beginPath();octx.moveTo(tl2.x,tl2.y);octx.lineTo(P.tl.x,P.tl.y);octx.stroke();octx.setLineDash([])}
+  octx.setLineDash([2/s,5/s]);octx.strokeStyle=COL.film;octx.lineWidth=lw;octx.beginPath();octx.moveTo(P.f1.x,P.f1.y);octx.lineTo(P.f2.x,P.f2.y);octx.stroke();octx.setLineDash([]);
+  const r=11/s;octx.font=`600 ${12/s}px ${getComputedStyle(document.body).fontFamily}`;octx.textBaseline='middle';
+  for(const k of Object.keys(P)){const p=P[k],c=k[0]==='m'?COL.mid:k[0]==='h'?COL.card:k[0]==='f'?COL.film:COL.thor;
+    octx.beginPath();octx.arc(p.x,p.y,r,0,7);octx.fillStyle=S.moved.has(k)?c:'rgba(0,0,0,.55)';octx.fill();
+    octx.lineWidth=2.5/s;octx.strokeStyle=c;octx.stroke();
+    octx.beginPath();octx.arc(p.x,p.y,1.6/s,0,7);octx.fillStyle=S.moved.has(k)?'#000':c;octx.fill();
+    const lft=LEFTLBL.has(k),tx=p.x+(lft?-r-4/s:r+4/s);octx.textAlign=lft?'right':'left';
+    octx.lineWidth=3/s;octx.strokeStyle='rgba(0,0,0,.8)';octx.strokeText(LABEL[k],tx,p.y);octx.fillStyle=c;octx.fillText(LABEL[k],tx,p.y);}
+  update(G);
+}
+
+/* ---------- Results & reliability ---------- */
+function update(G){
+  const prof=PROFILES[$('#profile').value],al=[];
+  const notMoved=Object.keys(S.pts).filter(k=>k[0]!=='f'&&!S.moved.has(k));
+  if(!S.sample&&notMoved.length) al.push({lvl:'block',t:`${notMoved.length} point(s) encore à leur place par défaut : ${[...new Set(notMoved.map(k=>LABEL[k]))].join(', ')}.`});
+  if(!(G.dR<0&&G.dL>0)) al.push({lvl:'block',t:"Les deux bords du cœur doivent être de part et d'autre de la ligne médiane (C-D à gauche de l'image, C-G à droite)."});
+  if(!(G.dTR<0&&G.dTL>0)) al.push({lvl:'block',t:"Les deux bords du thorax doivent être de part et d'autre de la ligne médiane."});
+  if(G.card>=G.thor) al.push({lvl:'block',t:'Le diamètre cardiaque dépasse le diamètre thoracique : vérifiez les points.'});
+  else if(G.ict<.33||G.ict>.85) al.push({lvl:'warn',t:'Valeur inhabituelle : vérifiez le placement des points.'});
+  if(G.tilt>12) al.push({lvl:'warn',t:`Ligne médiane inclinée de ${Math.round(G.tilt)}° : reprenez la photo bien de face si possible.`});
+  if(S.stats&&!S.sample){
+    if(S.stats.std<22) al.push({lvl:'warn',t:'Photo peu contrastée : reflet ou flou possible. Augmentez le contraste ou reprenez la photo.'});
+    if(Math.min(S.W,S.H)<500) al.push({lvl:'warn',t:'Photo de faible résolution : la mesure peut être imprécise.'});
+  }
+  if(!$('#qInsp').checked) al.push({lvl:'warn',t:"Inspiration insuffisante : l'ICT est surestimé."});
+  if(!$('#qRot').checked) al.push({lvl:'warn',t:"Rotation : la silhouette cardiaque est déformée, ICT peu fiable."});
+  if(!$('#qCont').checked) al.push({lvl:'block',t:"Contours du cœur non visibles (épanchement, opacité) : l'ICT ne peut pas être calculé de façon fiable."});
+  if(prof.note) al.push({lvl:'warn',t:prof.note});
+  const blocked=al.some(a=>a.lvl==='block'),out=$('#ictOut'),v=$('#verdict');
+  out.textContent=fmt(G.ict);out.classList.toggle('unreliable',blocked);
+  const pct=x=>fmt(x/(G.thor||1)*100,0)+' % du thorax';
+  const calibrated=S.sample||S.moved.has('f1')||S.moved.has('f2');
+  const mm=x=>(calibrated&&Number.isFinite(G.mmpx))?Math.round(x*G.mmpx)+' mm':'– mm';
+  const vals={R:Math.abs(G.dR),L:Math.abs(G.dL),C:G.card,T:G.thor};
+  for(const k in vals){$('#d'+k).textContent=mm(vals[k]);$('#p'+k).textContent=pct(vals[k])}
+  if(!calibrated) al.push({lvl:'warn',t:"Mesures en mm non calibrées : placez les deux points F sur les bords gauche et droit du film (ou sur un repère de longueur connue)."});
+  else if(Number.isFinite(G.mmpx)) al.push({lvl:'ok',t:"Les mm sont mesurés sur le film. L'agrandissement radiographique (environ 5 à 10 % en PA, plus en AP) n'est pas corrigé ; l'ICT, lui, n'est pas affecté."});
+  S.lastMm=calibrated&&Number.isFinite(G.mmpx)?{mmParPx:G.mmpx,reference_mm:G.ref,coeurDroit:Math.round(vals.R*G.mmpx),coeurGauche:Math.round(vals.L*G.mmpx),coeur:Math.round(vals.C*G.mmpx),thorax:Math.round(vals.T*G.mmpx)}:null;
+  if(blocked){v.className='pill crit';v.textContent='Mesure impossible ou non fiable'}
+  else{
+    const t=prof.t,warn=al.some(a=>a.lvl==='warn');
+    if(G.ict>t+.02){v.className='pill crit';v.textContent=`Cardiomégalie probable (> ${fmt(t)})`}
+    else if(G.ict>=t-.02){v.className='pill warn';v.textContent=`Valeur limite (seuil ${fmt(t)})`}
+    else{v.className='pill good';v.textContent=`Dans les limites (≤ ${fmt(t)})`}
+    if(warn)v.textContent+=' · prudence';
+  }
+  if(S.sample) al.unshift({lvl:'ok',t:"Ceci est une radio d'exemple. Prenez une photo ou choisissez-en une dans la galerie pour mesurer un vrai cliché."});
+  const ul=$('#alerts');ul.innerHTML='';
+  for(const a of al){const li=document.createElement('li');li.className=a.lvl==='block'?'block':a.lvl==='ok'?'ok':'';li.textContent=a.t;ul.appendChild(li)}
+  S.last={ict:G.ict,card:G.card,thor:G.thor,blocked,alerts:al.map(a=>a.t)};
+}
+['profile','qInsp','qRot','qCont','filmSel'].forEach(id=>$('#'+id).addEventListener('change',draw));
+$('#refMm').addEventListener('input',draw);
+$('#filmSel').addEventListener('change',()=>{$('#refWrap').hidden=$('#filmSel').value!=='custom'});
+
+/* ---------- Pointer interaction ---------- */
+function toImg(e){const r=ov.getBoundingClientRect();return{x:(e.clientX-r.left)/S.scale,y:(e.clientY-r.top)/S.scale,cx:e.clientX-r.left,cy:e.clientY-r.top}}
+ov.addEventListener('pointerdown',e=>{
+  const p=toImg(e);
+  if(maskMode){drag={type:'mask',x0:p.x,y0:p.y,rect:{x:p.x,y:p.y,w:0,h:0}};ov.setPointerCapture(e.pointerId);return}
+  let best=null,bd=1e9;for(const k in S.pts){const q=S.pts[k],d=Math.hypot(q.x-p.x,q.y-p.y)*S.scale;if(d<bd){bd=d;best=k}}
+  if(best&&bd<34){drag={type:'pt',k:best,dx:S.pts[best].x-p.x,dy:S.pts[best].y-p.y};ov.setPointerCapture(e.pointerId);showLoupe(p);e.preventDefault()}
+});
+ov.addEventListener('pointermove',e=>{
+  if(!drag)return;const p=toImg(e);
+  if(drag.type==='mask'){const x=Math.min(drag.x0,p.x),y=Math.min(drag.y0,p.y);drag.rect={x,y,w:Math.abs(p.x-drag.x0),h:Math.abs(p.y-drag.y0)};draw();return}
+  const q=S.pts[drag.k];q.x=Math.max(0,Math.min(S.W,p.x+drag.dx));q.y=Math.max(0,Math.min(S.H,p.y+drag.dy));
+  S.moved.add(drag.k);if(drag.k[0]==='m'){S.moved.add('m1');S.moved.add('m2')}
+  draw();showLoupe({x:q.x,y:q.y,cx:q.x*S.scale,cy:q.y*S.scale});
+});
+const end=()=>{if(!drag)return;if(drag.type==='mask'&&drag.rect.w*S.scale>6&&drag.rect.h*S.scale>6){S.masks.push(drag.rect);toast('Zone masquée.')}drag=null;loupe.hidden=true;draw()};
+ov.addEventListener('pointerup',end);ov.addEventListener('pointercancel',end);
+function showLoupe(p){
+  loupe.hidden=false;const w=ov.clientWidth;
+  loupe.style.left=(p.cx<w/2?w-128:8)+'px';
+  const z=3,R=240/(z*S.scale)/2;
+  lctx.save();lctx.clearRect(0,0,240,240);lctx.beginPath();lctx.arc(120,120,120,0,7);lctx.clip();
+  lctx.fillStyle='#000';lctx.fillRect(0,0,240,240);
+  try{lctx.filter=filterStr()}catch(_){}
+  lctx.drawImage(S.src,p.x-R,p.y-R,2*R,2*R,0,0,240,240);lctx.filter='none';
+  lctx.fillStyle='#000';for(const m of S.masks){lctx.fillRect((m.x-(p.x-R))*240/(2*R),(m.y-(p.y-R))*240/(2*R),m.w*240/(2*R),m.h*240/(2*R))}
+  lctx.strokeStyle='#fff';lctx.lineWidth=2;lctx.beginPath();lctx.moveTo(120,96);lctx.lineTo(120,144);lctx.moveTo(96,120);lctx.lineTo(144,120);lctx.stroke();lctx.restore();
+}
+
+/* ---------- Tools ---------- */
+$('#maskBtn').addEventListener('click',()=>{maskMode=!maskMode;$('#maskBtn').setAttribute('aria-pressed',maskMode);$('#maskBtn').textContent=maskMode?'Terminer le masquage':'Masquer un nom';$('#hint').textContent=maskMode?"Tracez un rectangle sur le nom du patient. Le masque est définitif dans les mesures enregistrées.":"Faites glisser les 6 points : ligne médiane (M), bords du cœur (C-D, C-G) et bords internes du thorax (T-D, T-G). La droite du patient est à gauche de l'image."});
+$('#undoMask').addEventListener('click',()=>{S.masks.pop();draw()});
+$('#invBtn').addEventListener('click',()=>{invert=!invert;$('#invBtn').setAttribute('aria-pressed',invert);drawImage()});
+$('#contrast').addEventListener('input',drawImage);
+$('#resetPts').addEventListener('click',()=>{S.pts=defaultPts(S.W,S.H);S.moved=new Set();draw()});
+window.addEventListener('resize',()=>{clearTimeout(layout.h);layout.h=setTimeout(layout,120)});
+
+/* ---------- Storage (IndexedDB, on this phone only) ---------- */
+let dbP=null;
+function db(){if(dbP)return dbP;dbP=new Promise((res,rej)=>{try{const r=indexedDB.open('ict-facile',1);r.onupgradeneeded=()=>r.result.createObjectStore('mesures',{keyPath:'id'});r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)}catch(e){rej(e)}});return dbP}
+async function tx(mode,fn){const d=await db();return new Promise((res,rej)=>{const t=d.transaction('mesures',mode),st=t.objectStore('mesures');const r=fn(st);t.oncomplete=()=>res(r&&r.result);t.onerror=()=>rej(t.error)})}
+function maskedImage(max=1400){
+  const k=Math.min(1,max/Math.max(S.W,S.H)),c=document.createElement('canvas');c.width=Math.round(S.W*k);c.height=Math.round(S.H*k);
+  const g=c.getContext('2d');g.drawImage(S.src,0,0,c.width,c.height);g.fillStyle='#000';for(const m of S.masks)g.fillRect(m.x*k,m.y*k,m.w*k,m.h*k);
+  return c.toDataURL('image/jpeg',.85);
+}
+$('#saveBtn').addEventListener('click',async()=>{
+  if(S.sample){toast("La radio d'exemple n'est pas enregistrée. Chargez une vraie photo.");return}
+  const n={};for(const k in S.pts)n[k]=[+(S.pts[k].x/S.W).toFixed(5),+(S.pts[k].y/S.H).toFixed(5)];
+  const rec={id:S.recordId||('m'+Date.now().toString(36)),date:new Date().toISOString(),version:1,
+    profile:$('#profile').value,quality:{inspiration:$('#qInsp').checked,rotationAbsente:$('#qRot').checked,contoursVisibles:$('#qCont').checked},
+    points:n,ict:+S.last.ict.toFixed(4),mesures_mm:S.lastMm,film:$('#filmSel').value,fiable:!S.last.blocked,alertes:S.last.alerts,width:S.W,height:S.H,image:maskedImage()};
+  try{await tx('readwrite',st=>st.put(rec));S.recordId=rec.id;S.masks=[];
+    const im=new Image();im.onload=()=>{S.src=im;drawImage();draw()};im.src=rec.image;
+    toast(`Mesure enregistrée : ICT ${fmt(rec.ict)}.`)}
+  catch(e){toast("Enregistrement impossible sur ce navigateur (stockage bloqué ou mode privé).")}
+});
+async function all(){try{return (await tx('readonly',st=>st.getAll()))||[]}catch(e){return null}}
+async function renderHist(){
+  const ul=$('#histList'),list=await all();ul.innerHTML='';
+  if(list===null){ul.innerHTML='<li><span></span><span>Le stockage local est bloqué sur ce navigateur.</span><span></span></li>';return}
+  if(!list.length){const li=document.createElement('li');li.innerHTML='<span></span><span>Aucune mesure pour l\'instant. Chargez une photo, ajustez les points puis touchez « Enregistrer la mesure ».</span><span></span>';ul.appendChild(li);return}
+  list.sort((a,b)=>b.date.localeCompare(a.date));
+  for(const r of list){
+    const li=document.createElement('li'),d=new Date(r.date);
+    li.innerHTML=`<img alt="" src="${r.image}"><div><b>ICT ${fmt(r.ict)}</b>${r.fiable?'':' <small style="display:inline;color:var(--crit)">non fiable</small>'}<small>${d.toLocaleDateString('fr-FR')} ${d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})} · ${PROFILES[r.profile]?.name||''}</small></div><div class="row"><button class="btn small" data-open>Ouvrir</button><button class="btn small" data-del>Suppr.</button></div>`;
+    li.querySelector('[data-open]').onclick=()=>{const im=new Image();im.onload=()=>{const p={};for(const k in r.points)p[k]={x:r.points[k][0]*im.naturalWidth,y:r.points[k][1]*im.naturalHeight};$('#profile').value=r.profile;$('#qInsp').checked=r.quality.inspiration;$('#qRot').checked=r.quality.rotationAbsente;$('#qCont').checked=r.quality.contoursVisibles;setImage(im,{pts:p,recordId:r.id});$('#histDlg').close()};im.src=r.image};
+    const del=li.querySelector('[data-del]');
+    del.onclick=async()=>{if(del.dataset.armed){await tx('readwrite',st=>st.delete(r.id));renderHist()}else{del.dataset.armed=1;del.textContent='Confirmer';setTimeout(()=>{delete del.dataset.armed;del.textContent='Suppr.'},3000)}};
+    ul.appendChild(li);
+  }
+}
+$('#histBtn').addEventListener('click',()=>{renderHist();$('#histDlg').showModal()});
+$('#helpBtn').addEventListener('click',()=>$('#helpDlg').showModal());
+document.querySelectorAll('[data-close]').forEach(b=>b.addEventListener('click',()=>b.closest('dialog').close()));
+if(isFramed){$('#exportRow').innerHTML='<p class="hint">L\'export des annotations est disponible dans l\'application installée sur le téléphone.</p>'}
+$('#exportBtn')?.addEventListener('click',async()=>{
+  const list=await all();if(!list||!list.length){toast('Aucune mesure à exporter.');return}
+  const blob=new Blob([JSON.stringify({format:'ict-facile-annotations',version:1,export:new Date().toISOString(),mesures:list})],{type:'application/json'});
+  const name=`ict-facile-${new Date().toISOString().slice(0,10)}.json`,file=new File([blob],name,{type:'application/json'});
+  try{if(navigator.canShare&&navigator.canShare({files:[file]})){await navigator.share({files:[file],title:'Annotations ICT Facile'});return}}catch(e){}
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();a.remove();
+});
+
+/* ---------- Offline (installed app only) ---------- */
+if(!isFramed&&'serviceWorker' in navigator&&location.protocol==='https:'){navigator.serviceWorker.register('sw.js').catch(()=>{})}
+
+/* ---------- Start with the sample film ---------- */
+const sc=makeSample();
+setImage(sc,{sample:true,pts:{f1:{x:6,y:40},f2:{x:894,y:40},m1:{x:450,y:90},m2:{x:450,y:960},hr:{x:308,y:640},hl:{x:643,y:650},tr:{x:152,y:735},tl:{x:748,y:735}}});
+})();
+</script>
+</body></html>
