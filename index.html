@@ -29,7 +29,7 @@
 body{background:var(--bg);color:var(--fg);font-family:var(--font);font-size:15px;line-height:1.45;margin:0;
   padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0 32px}
 body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
-.wrap{max-width:760px;margin:0 auto;display:flex;flex-direction:column;gap:14px}
+.wrap{max-width:760px;width:100%;min-width:0;margin:0 auto;display:flex;flex-direction:column;gap:14px}
 header{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);display:flex;align-items:center;justify-content:space-between;gap:12px;padding-block:12px 8px;border-bottom:1px solid var(--line)}
 .brand{display:flex;align-items:baseline;gap:8px}
 .brand b{font-size:19px;font-weight:700;letter-spacing:-.01em}
@@ -45,9 +45,11 @@ button,select,label.btn{font:inherit;color:inherit}
 .btn svg{width:18px;height:18px;flex:none}
 .add{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .add input{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
-.viewer{position:relative;background:#000;border-radius:12px;overflow:hidden;display:flex;justify-content:center;border:1px solid var(--line)}
-.stage{position:relative;max-width:100%}
-.stage canvas{display:block;max-width:100%}
+.viewer{min-width:0;width:100%;position:relative;background:#000;border-radius:12px;overflow:hidden;display:flex;justify-content:center;border:1px solid var(--line)}
+.stage{position:relative;flex:none;overflow:hidden}
+html,body{overflow-x:hidden}
+.wrap>*{min-width:0}
+.stage canvas{display:block}
 #ov{position:absolute;inset:0;touch-action:none}
 #loupe{position:absolute;top:8px;left:8px;width:120px;height:120px;border-radius:50%;border:2px solid #fff;box-shadow:0 2px 10px rgba(0,0,0,.6);pointer-events:none}
 .tag{position:absolute;top:8px;right:8px;font-family:var(--mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;background:rgba(0,0,0,.65);color:#fff;padding:4px 8px;border-radius:6px}
@@ -298,7 +300,9 @@ $('#galIn').addEventListener('change',e=>{loadFile(e.target.files[0]);e.target.v
 
 /* ---------- Layout & drawing ---------- */
 function layout(){
-  const vw=$('#viewer').clientWidth||600, maxH=Math.max(320,window.innerHeight*.62);
+  // Width comes from the page column (not the viewer, whose width follows the image) to avoid a growth loop on phones.
+  const wr=$('.wrap'),vw=Math.max(200,(wr.clientWidth||600)-2), maxH=Math.max(320,Math.min(window.innerHeight,screen.height||9999)*.62);
+  layout.w=wr.clientWidth;
   const s=Math.min(vw/S.W,maxH/S.H);S.scale=s;
   const w=Math.round(S.W*s),h=Math.round(S.H*s),dpr=window.devicePixelRatio||1;
   for(const c of[imgC,ov]){c.style.width=w+'px';c.style.height=h+'px';c.width=Math.round(w*dpr);c.height=Math.round(h*dpr)}
@@ -354,7 +358,7 @@ function draw(){
 function update(G){
   const prof=PROFILES[$('#profile').value],al=[];
   const notMoved=Object.keys(S.pts).filter(k=>k[0]!=='f'&&!S.moved.has(k));
-  if(!S.sample&&notMoved.length) al.push({lvl:'block',t:`${notMoved.length} point(s) encore à leur place par défaut : ${[...new Set(notMoved.map(k=>LABEL[k]))].join(', ')}.`});
+  if(!S.sample&&notMoved.length) al.push({lvl:'block',pending:true,t:`${notMoved.length} point(s) encore à leur place par défaut : ${[...new Set(notMoved.map(k=>LABEL[k]))].join(', ')}.`});
   if(!(G.dR<0&&G.dL>0)) al.push({lvl:'block',t:"Les deux bords du cœur doivent être de part et d'autre de la ligne médiane (C-D à gauche de l'image, C-G à droite)."});
   if(!(G.dTR<0&&G.dTL>0)) al.push({lvl:'block',t:"Les deux bords du thorax doivent être de part et d'autre de la ligne médiane."});
   if(G.card>=G.thor) al.push({lvl:'block',t:'Le diamètre cardiaque dépasse le diamètre thoracique : vérifiez les points.'});
@@ -378,7 +382,9 @@ function update(G){
   if(!calibrated) al.push({lvl:'warn',t:"Mesures en mm non calibrées : placez les deux points F sur les bords gauche et droit du film (ou sur un repère de longueur connue)."});
   else if(Number.isFinite(G.mmpx)) al.push({lvl:'ok',t:"Les mm sont mesurés sur le film. L'agrandissement radiographique (environ 5 à 10 % en PA, plus en AP) n'est pas corrigé ; l'ICT, lui, n'est pas affecté."});
   S.lastMm=calibrated&&Number.isFinite(G.mmpx)?{mmParPx:G.mmpx,reference_mm:G.ref,coeurDroit:Math.round(vals.R*G.mmpx),coeurGauche:Math.round(vals.L*G.mmpx),coeur:Math.round(vals.C*G.mmpx),thorax:Math.round(vals.T*G.mmpx)}:null;
-  if(blocked){v.className='pill crit';v.textContent='Mesure impossible ou non fiable'}
+  const onlyPending=blocked&&al.filter(a=>a.lvl==='block').every(a=>a.pending);
+  if(onlyPending){v.className='pill muted';v.textContent='Placez les points pour obtenir l\'ICT';out.classList.remove('unreliable');out.textContent='–'}
+  else if(blocked){v.className='pill crit';v.textContent='Mesure impossible ou non fiable'}
   else{
     const t=prof.t,warn=al.some(a=>a.lvl==='warn');
     if(G.ict>t+.02){v.className='pill crit';v.textContent=`Cardiomégalie probable (> ${fmt(t)})`}
@@ -430,7 +436,7 @@ $('#undoMask').addEventListener('click',()=>{S.masks.pop();draw()});
 $('#invBtn').addEventListener('click',()=>{invert=!invert;$('#invBtn').setAttribute('aria-pressed',invert);drawImage()});
 $('#contrast').addEventListener('input',drawImage);
 $('#resetPts').addEventListener('click',()=>{S.pts=defaultPts(S.W,S.H);S.moved=new Set();draw()});
-window.addEventListener('resize',()=>{clearTimeout(layout.h);layout.h=setTimeout(layout,120)});
+window.addEventListener('resize',()=>{clearTimeout(layout.h);layout.h=setTimeout(()=>{if($('.wrap').clientWidth!==layout.w)layout()},150)});
 
 /* ---------- Storage (IndexedDB, on this phone only) ---------- */
 let dbP=null;
