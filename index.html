@@ -65,6 +65,8 @@ html,body{overflow-x:hidden}
 .ict output{font-family:var(--mono);font-size:44px;font-weight:600;line-height:1;font-variant-numeric:tabular-nums}
 .ict output.unreliable{color:var(--muted);text-decoration:line-through;text-decoration-thickness:2px}
 .pill{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;font-size:13px;font-weight:600;border:1px solid currentColor}
+.reason{margin:0;font-size:14px;color:var(--crit);font-weight:500}
+.ver{font-family:var(--mono);font-size:11px;color:var(--muted)}
 .pill.good{color:var(--good)} .pill.warn{color:var(--warn)} .pill.crit{color:var(--crit)} .pill.muted{color:var(--muted)}
 .dims{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
 @media (min-width:560px){.dims{grid-template-columns:repeat(4,minmax(0,1fr))}}
@@ -149,6 +151,7 @@ dialog::backdrop{background:rgba(0,0,0,.55)}
       <div class="ict"><small>ICT</small><output id="ictOut">0,55</output></div>
       <span class="pill" id="verdict">…</span>
     </div>
+    <p class="reason" id="reason" hidden></p>
     <div class="dims">
       <div class="dim"><small><i style="background:var(--cardiac)"></i>Cœur droit</small><b id="dR">–</b><em id="pR"></em></div>
       <div class="dim"><small><i style="background:var(--cardiac)"></i>Cœur gauche</small><b id="dL">–</b><em id="pL"></em></div>
@@ -187,7 +190,7 @@ dialog::backdrop{background:rgba(0,0,0,.55)}
     <div class="row">
       <button class="btn primary" id="saveBtn" type="button">Enregistrer la mesure</button>
     </div>
-    <p class="legal">Outil d'aide à la mesure, non certifié comme dispositif médical. Le radiologue reste seul responsable de l'interprétation. Les seuils affichés sont indicatifs.</p>
+    <p class="legal">Outil d'aide à la mesure, non certifié comme dispositif médical. Le radiologue reste seul responsable de l'interprétation. Les seuils affichés sont indicatifs. <span class="ver">Version 1.2</span></p>
   </section>
 </div>
 
@@ -357,7 +360,7 @@ function draw(){
 /* ---------- Results & reliability ---------- */
 function update(G){
   const prof=PROFILES[$('#profile').value],al=[];
-  const notMoved=Object.keys(S.pts).filter(k=>k[0]!=='f'&&!S.moved.has(k));
+  const notMoved=Object.keys(S.pts).filter(k=>(k[0]==='h'||k[0]==='t')&&!S.moved.has(k));
   if(!S.sample&&notMoved.length) al.push({lvl:'block',pending:true,t:`${notMoved.length} point(s) encore à leur place par défaut : ${[...new Set(notMoved.map(k=>LABEL[k]))].join(', ')}.`});
   if(!(G.dR<0&&G.dL>0)) al.push({lvl:'block',t:"Les deux bords du cœur doivent être de part et d'autre de la ligne médiane (C-D à gauche de l'image, C-G à droite)."});
   if(!(G.dTR<0&&G.dTL>0)) al.push({lvl:'block',t:"Les deux bords du thorax doivent être de part et d'autre de la ligne médiane."});
@@ -383,6 +386,7 @@ function update(G){
   else if(Number.isFinite(G.mmpx)) al.push({lvl:'ok',t:"Les mm sont mesurés sur le film. L'agrandissement radiographique (environ 5 à 10 % en PA, plus en AP) n'est pas corrigé ; l'ICT, lui, n'est pas affecté."});
   S.lastMm=calibrated&&Number.isFinite(G.mmpx)?{mmParPx:G.mmpx,reference_mm:G.ref,coeurDroit:Math.round(vals.R*G.mmpx),coeurGauche:Math.round(vals.L*G.mmpx),coeur:Math.round(vals.C*G.mmpx),thorax:Math.round(vals.T*G.mmpx)}:null;
   const onlyPending=blocked&&al.filter(a=>a.lvl==='block').every(a=>a.pending);
+  const rs=$('#reason'),br=al.filter(a=>a.lvl==='block');rs.hidden=!br.length;rs.textContent=br.length?'Pourquoi : '+br.map(a=>a.t).join(' '):'';rs.style.color=onlyPending?'var(--muted)':'';
   if(onlyPending){v.className='pill muted';v.textContent='Placez les points pour obtenir l\'ICT';out.classList.remove('unreliable');out.textContent='–'}
   else if(blocked){v.className='pill crit';v.textContent='Mesure impossible ou non fiable'}
   else{
@@ -407,7 +411,7 @@ ov.addEventListener('pointerdown',e=>{
   const p=toImg(e);
   if(maskMode){drag={type:'mask',x0:p.x,y0:p.y,rect:{x:p.x,y:p.y,w:0,h:0}};ov.setPointerCapture(e.pointerId);return}
   let best=null,bd=1e9;for(const k in S.pts){const q=S.pts[k],d=Math.hypot(q.x-p.x,q.y-p.y)*S.scale;if(d<bd){bd=d;best=k}}
-  if(best&&bd<34){drag={type:'pt',k:best,dx:S.pts[best].x-p.x,dy:S.pts[best].y-p.y};ov.setPointerCapture(e.pointerId);showLoupe(p);e.preventDefault()}
+  if(best&&bd<34){S.moved.add(best);drag={type:'pt',k:best,dx:S.pts[best].x-p.x,dy:S.pts[best].y-p.y};ov.setPointerCapture(e.pointerId);showLoupe(p);e.preventDefault()}
 });
 ov.addEventListener('pointermove',e=>{
   if(!drag)return;const p=toImg(e);
@@ -486,7 +490,7 @@ $('#exportBtn')?.addEventListener('click',async()=>{
 });
 
 /* ---------- Offline (installed app only) ---------- */
-if(!isFramed&&'serviceWorker' in navigator&&location.protocol==='https:'){navigator.serviceWorker.register('sw.js').catch(()=>{})}
+if(!isFramed&&'serviceWorker' in navigator&&location.protocol==='https:'){navigator.serviceWorker.register('sw.js',{updateViaCache:'none'}).then(r=>r.update()).catch(()=>{});let reloaded=false;navigator.serviceWorker.addEventListener('controllerchange',()=>{if(!reloaded&&navigator.serviceWorker.controller&&!drag&&S.sample){reloaded=true;location.reload()}})}
 
 /* ---------- Start with the sample film ---------- */
 const sc=makeSample();
