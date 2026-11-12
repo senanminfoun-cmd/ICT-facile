@@ -194,18 +194,26 @@ dialog::backdrop{background:rgba(0,0,0,.55)}
         <label class="check" for="qCont"><input type="checkbox" id="qCont" checked> Contours du cœur visibles</label>
       </div>
     </div>
-    <label class="field" for="refInt"><span>Référence interne (facultatif, jamais le nom)</span>
-      <input class="txt" id="refInt" type="text" maxlength="40" autocomplete="off" placeholder="N° de registre ou de dossier">
-    </label>
+    <div class="row">
+      <label class="field" for="refInt"><span>Identifiant patient (jamais le nom)</span>
+        <input class="txt" id="refInt" type="text" maxlength="40" autocomplete="off" placeholder="N° de dossier ou de registre">
+      </label>
+      <label class="field" for="ageIn" style="flex:0 0 110px;min-width:0"><span>Âge (ans)</span>
+        <input class="txt" id="ageIn" type="number" min="0" max="120" inputmode="numeric">
+      </label>
+    </div>
     <div class="row">
       <button class="btn primary" id="saveBtn" type="button">Enregistrer la mesure</button>
     </div>
     <div class="case" id="caseBox" hidden>
       <b id="caseCode"></b>
-      <span>Code du cas : reportez-le dans votre registre, à côté du nom du patient, pour retrouver ce cliché le jour de l'échographie.</span>
-      <button class="btn small" id="copyCode" type="button">Copier</button>
+      <span><strong>À noter maintenant dans le bloc-notes de votre téléphone :</strong> nom et prénom du patient, âge, identifiant et ce code. Le nom n'est jamais enregistré dans l'app ; c'est votre note qui permettra de retrouver ce cliché le jour de l'échographie.</span>
+      <div class="row">
+        <button class="btn small primary" id="shareNote" type="button" hidden>Envoyer vers Notes</button>
+        <button class="btn small" id="copyCode" type="button">Copier pour le bloc-notes</button>
+      </div>
     </div>
-    <p class="legal">Outil d'aide à la mesure, non certifié comme dispositif médical. Le radiologue reste seul responsable de l'interprétation. Les seuils affichés sont indicatifs. <span class="ver">Version 1.4</span></p>
+    <p class="legal">Outil d'aide à la mesure, non certifié comme dispositif médical. Le radiologue reste seul responsable de l'interprétation. Les seuils affichés sont indicatifs. <span class="ver">Version 1.5</span></p>
   </section>
 </div>
 
@@ -213,7 +221,7 @@ dialog::backdrop{background:rgba(0,0,0,.55)}
   <div class="dlg">
     <div class="dlg-head"><h2>Mesures enregistrées</h2><button class="btn small" type="button" data-close>Fermer</button></div>
     <p class="hint">Stockées uniquement sur ce téléphone, noms masqués. Elles serviront à entraîner l'IA.</p>
-    <input class="txt" id="histSearch" type="search" placeholder="Rechercher un code (ICT-…) ou une référence" autocomplete="off">
+    <input class="txt" id="histSearch" type="search" placeholder="Rechercher un code, un identifiant ou un âge" autocomplete="off">
     <ul class="hist" id="histList"></ul>
     <div class="row" id="exportRow">
       <button class="btn small" id="exportBtn" type="button">Exporter les annotations (JSON)</button>
@@ -333,7 +341,7 @@ function loadFile(file){
     const max=2000,k=Math.min(1,max/Math.max(im.naturalWidth,im.naturalHeight));
     const c=document.createElement('canvas');c.width=Math.round(im.naturalWidth*k);c.height=Math.round(im.naturalHeight*k);
     c.getContext('2d').drawImage(im,0,0,c.width,c.height);URL.revokeObjectURL(url);
-    setImage(c,{});$('#refInt').value='';showCode(null);toast('Photo chargée. Masquez le nom puis placez les points.');
+    setImage(c,{});$('#refInt').value='';$('#ageIn').value='';showCode(null);toast('Photo chargée. Masquez le nom puis placez les points.');
   };
   im.onerror=()=>toast("Impossible de lire cette image. Essayez une photo JPEG ou PNG.");
   im.src=url;
@@ -496,12 +504,12 @@ $('#saveBtn').addEventListener('click',async()=>{
   const n={};for(const k in S.pts)n[k]=[+(S.pts[k].x/S.W).toFixed(5),+(S.pts[k].y/S.H).toFixed(5)];
   const prev=S.recordId?await tx('readonly',st=>st.get(S.recordId)).catch(()=>null):null;
   const code=prev?.code||await newCode();
-  const rec={id:S.recordId||('m'+Date.now().toString(36)),code,refInterne:$('#refInt').value.trim().slice(0,40),echo:prev?.echo||null,date:prev?.date||new Date().toISOString(),version:1,
+  const rec={id:S.recordId||('m'+Date.now().toString(36)),code,refInterne:$('#refInt').value.trim().slice(0,40),age:$('#ageIn').value?Math.round(+$('#ageIn').value):null,echo:prev?.echo||null,date:prev?.date||new Date().toISOString(),version:1,
     profile:$('#profile').value,quality:{inspiration:$('#qInsp').checked,rotationAbsente:$('#qRot').checked,contoursVisibles:$('#qCont').checked},
     points:n,ict:+S.last.ict.toFixed(4),mesures_mm:S.lastMm,film:$('#filmSel').value,fiable:!S.last.blocked,alertes:S.last.alerts,width:S.W,height:S.H,image:maskedImage()};
   try{await tx('readwrite',st=>st.put(rec));S.recordId=rec.id;S.masks=[];
     const im=new Image();im.onload=()=>{S.src=im;drawImage();draw()};im.src=rec.image;
-    showCode(rec.code);toast(`Mesure enregistrée : ICT ${fmt(rec.ict)}, code ${rec.code}.`)}
+    showCode(rec.code,true);toast(`Mesure enregistrée : ICT ${fmt(rec.ict)}, code ${rec.code}.`)}
   catch(e){toast("Enregistrement impossible sur ce navigateur (stockage bloqué ou mode privé).")}
 });
 const CODE_CH='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -511,8 +519,12 @@ async function newCode(){
   for(let i=0;i<50;i++){const a=new Uint8Array(3);crypto.getRandomValues(a);const c=`ICT-${dd}-${[...a].map(x=>CODE_CH[x%CODE_CH.length]).join('')}`;if(!used.has(c))return c}
   return `ICT-${dd}-${Date.now().toString(36).slice(-4).toUpperCase()}`;
 }
-function showCode(c){$('#caseBox').hidden=!c;$('#caseCode').textContent=c||''}
-$('#copyCode').addEventListener('click',()=>{const c=$('#caseCode').textContent;try{navigator.clipboard.writeText(c).then(()=>toast('Code copié.'),()=>toast(c))}catch(e){toast(c)}});
+function showCode(c,scroll){$('#caseBox').hidden=!c;$('#caseCode').textContent=c||'';if(c&&scroll)$('#caseBox').scrollIntoView({behavior:'smooth',block:'center'})}
+function noteText(){const c=$('#caseCode').textContent,id=$('#refInt').value.trim(),age=$('#ageIn').value;
+  return `ICT Facile – ${c}\nDate : ${new Date().toLocaleDateString('fr-FR')}\nNom et prénom : \nÂge : ${age?age+' ans':''}\nIdentifiant : ${id}\nICT : ${S.last?fmt(S.last.ict):''}`}
+if(!isFramed&&navigator.share)$('#shareNote').hidden=false;
+$('#shareNote').addEventListener('click',async()=>{try{await navigator.share({title:'ICT Facile '+$('#caseCode').textContent,text:noteText()})}catch(e){}});
+$('#copyCode').addEventListener('click',()=>{const t=noteText();try{navigator.clipboard.writeText(t).then(()=>toast('Copié : collez-le dans le bloc-notes et ajoutez le nom.'),()=>toast($('#caseCode').textContent))}catch(e){toast($('#caseCode').textContent)}});
 const esc=t=>String(t??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 function echoSummary(e){if(!e)return'';const c=['OG','VG','OD','VD'].filter(k=>e.cavites?.includes(k));return 'Écho : '+(c.length?c.join(', '):(e.cavites?.includes('aucune')?'pas de dilatation':'renseignée'))+(e.fevg?` · FEVG ${e.fevg} %`:'')+(e.pericarde?' · épanchement':'')}
 let echoId=null;
@@ -538,13 +550,13 @@ async function renderHist(){
   if(!list.length){const li=document.createElement('li');li.innerHTML='<span></span><span>Aucune mesure pour l\'instant. Chargez une photo, ajustez les points puis touchez « Enregistrer la mesure ».</span><span></span>';ul.appendChild(li);return}
   list.sort((a,b)=>b.date.localeCompare(a.date));
   const q=($('#histSearch').value||'').trim().toUpperCase();
-  const shown=q?list.filter(r=>(r.code||'').toUpperCase().includes(q)||(r.refInterne||'').toUpperCase().includes(q)):list;
+  const shown=q?list.filter(r=>(r.code||'').toUpperCase().includes(q)||(r.refInterne||'').toUpperCase().includes(q)||String(r.age??'')===q):list;
   if(!shown.length){const li=document.createElement('li');li.innerHTML='<span></span><span>Aucun cas ne correspond à cette recherche.</span><span></span>';ul.appendChild(li);return}
   for(const r of shown){
     const li=document.createElement('li'),d=new Date(r.date);
-    li.innerHTML=`<img alt="" src="${r.image}"><div><b>${esc(r.code||'')} · ICT ${fmt(r.ict)}</b>${r.fiable?'':' <small style="display:inline;color:var(--crit)">non fiable</small>'}${r.refInterne?`<small>Réf. ${esc(r.refInterne)}</small>`:''}${r.echo?`<span class="echo-tag">${esc(echoSummary(r.echo))}</span>`:''}<small>${d.toLocaleDateString('fr-FR')} ${d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})} · ${PROFILES[r.profile]?.name||''}</small></div><div class="row"><button class="btn small" data-open>Ouvrir</button><button class="btn small" data-echo>Écho</button><button class="btn small" data-del>Suppr.</button></div>`;
+    li.innerHTML=`<img alt="" src="${r.image}"><div><b>${esc(r.code||'')} · ICT ${fmt(r.ict)}</b>${r.fiable?'':' <small style="display:inline;color:var(--crit)">non fiable</small>'}<small>${d.toLocaleDateString('fr-FR')} · Id. ${esc(r.refInterne||'–')} · ${r.age!=null?esc(r.age)+' ans':'âge –'}</small>${r.echo?`<span class="echo-tag">${esc(echoSummary(r.echo))}</span>`:''}<small>${d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})} · ${PROFILES[r.profile]?.name||''}</small></div><div class="row"><button class="btn small" data-open>Ouvrir</button><button class="btn small" data-echo>Écho</button><button class="btn small" data-del>Suppr.</button></div>`;
     li.querySelector('[data-echo]').onclick=()=>openEcho(r.id);
-    li.querySelector('[data-open]').onclick=()=>{const im=new Image();im.onload=()=>{const p={};for(const k in r.points)p[k]={x:r.points[k][0]*im.naturalWidth,y:r.points[k][1]*im.naturalHeight};$('#profile').value=r.profile;$('#qInsp').checked=r.quality.inspiration;$('#qRot').checked=r.quality.rotationAbsente;$('#qCont').checked=r.quality.contoursVisibles;setImage(im,{pts:p,recordId:r.id});$('#refInt').value=r.refInterne||'';showCode(r.code);$('#histDlg').close()};im.src=r.image};
+    li.querySelector('[data-open]').onclick=()=>{const im=new Image();im.onload=()=>{const p={};for(const k in r.points)p[k]={x:r.points[k][0]*im.naturalWidth,y:r.points[k][1]*im.naturalHeight};$('#profile').value=r.profile;$('#qInsp').checked=r.quality.inspiration;$('#qRot').checked=r.quality.rotationAbsente;$('#qCont').checked=r.quality.contoursVisibles;setImage(im,{pts:p,recordId:r.id});$('#refInt').value=r.refInterne||'';$('#ageIn').value=r.age??'';showCode(r.code);$('#histDlg').close()};im.src=r.image};
     const del=li.querySelector('[data-del]');
     del.onclick=async()=>{if(del.dataset.armed){await tx('readwrite',st=>st.delete(r.id));renderHist()}else{del.dataset.armed=1;del.textContent='Confirmer';setTimeout(()=>{delete del.dataset.armed;del.textContent='Suppr.'},3000)}};
     ul.appendChild(li);
