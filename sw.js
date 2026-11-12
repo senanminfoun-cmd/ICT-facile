@@ -1,5 +1,5 @@
 // Network first: the app updates as soon as the phone is online; the cache serves it offline.
-const C='ict-facile-v7';
+const C='ict-facile-v8';
 const FILES=['./','index.html','manifest.json','icon-192.png','icon-512.png','icon-180.png'];
 self.addEventListener('install',e=>e.waitUntil(caches.open(C).then(c=>c.addAll(FILES.map(f=>new Request(f,{cache:'reload'})))).then(()=>self.skipWaiting())));
 self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(k=>Promise.all(k.filter(x=>x!==C).map(x=>caches.delete(x)))).then(()=>self.clients.claim())));
