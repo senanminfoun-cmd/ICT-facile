@@ -195,8 +195,8 @@ dialog::backdrop{background:rgba(0,0,0,.55)}
       </div>
     </div>
     <div class="row">
-      <label class="field" for="refInt"><span>Identifiant patient (jamais le nom)</span>
-        <input class="txt" id="refInt" type="text" maxlength="40" autocomplete="off" placeholder="N° de dossier ou de registre">
+      <label class="field" for="refInt"><span>Identifiant (n° automatique, modifiable)</span>
+        <input class="txt" id="refInt" type="text" maxlength="40" autocomplete="off" placeholder="1">
       </label>
       <label class="field" for="ageIn" style="flex:0 0 110px;min-width:0"><span>Âge (ans)</span>
         <input class="txt" id="ageIn" type="number" min="0" max="120" inputmode="numeric">
@@ -213,7 +213,7 @@ dialog::backdrop{background:rgba(0,0,0,.55)}
         <button class="btn small" id="copyCode" type="button">Copier pour le bloc-notes</button>
       </div>
     </div>
-    <p class="legal">Outil d'aide à la mesure, non certifié comme dispositif médical. Le radiologue reste seul responsable de l'interprétation. Les seuils affichés sont indicatifs. <span class="ver">Version 1.5</span></p>
+    <p class="legal">Outil d'aide à la mesure, non certifié comme dispositif médical. Le radiologue reste seul responsable de l'interprétation. Les seuils affichés sont indicatifs. <span class="ver">Version 1.6</span></p>
   </section>
 </div>
 
@@ -341,7 +341,7 @@ function loadFile(file){
     const max=2000,k=Math.min(1,max/Math.max(im.naturalWidth,im.naturalHeight));
     const c=document.createElement('canvas');c.width=Math.round(im.naturalWidth*k);c.height=Math.round(im.naturalHeight*k);
     c.getContext('2d').drawImage(im,0,0,c.width,c.height);URL.revokeObjectURL(url);
-    setImage(c,{});$('#refInt').value='';$('#ageIn').value='';showCode(null);toast('Photo chargée. Masquez le nom puis placez les points.');
+    setImage(c,{});$('#refInt').value='';$('#ageIn').value='';nextId().then(n=>{if(!$('#refInt').value)$('#refInt').value=n});showCode(null);toast('Photo chargée. Masquez le nom puis placez les points.');
   };
   im.onerror=()=>toast("Impossible de lire cette image. Essayez une photo JPEG ou PNG.");
   im.src=url;
@@ -543,6 +543,11 @@ $('#echoForm').addEventListener('submit',async ev=>{ev.preventDefault();
   const cav=['OG','VG','OD','VD'].filter(k=>$('#e'+k).checked);if($('#eNone').checked)cav.push('aucune');
   r.echo={cavites:cav,pericarde:$('#ePeri').checked,fevg:$('#eFevg').value?+$('#eFevg').value:null,date:$('#eDate').value||null,commentaire:$('#eCom').value.trim().slice(0,300),saisi:new Date().toISOString()};
   await tx('readwrite',st=>st.put(r));$('#echoDlg').close();renderHist();toast(`Résultat d'écho enregistré pour ${r.code}.`)});
+async function nextId(){
+  const list=(await all())||[];
+  const nums=list.map(r=>/^\d+$/.test((r.refInterne||'').trim())?+r.refInterne:0);
+  return String(Math.max(list.length,...nums,0)+1);
+}
 async function all(){try{return (await tx('readonly',st=>st.getAll()))||[]}catch(e){return null}}
 async function renderHist(){
   const ul=$('#histList'),list=await all();ul.innerHTML='';
