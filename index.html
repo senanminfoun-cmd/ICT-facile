@@ -70,6 +70,7 @@ html,body{overflow-x:hidden}
 .case span{font-size:13px;color:var(--muted);flex:1;min-width:160px}
 .txt{min-height:44px;border-radius:10px;border:1px solid var(--line);background:var(--surface2);padding:0 10px;font:inherit;color:inherit;width:100%}
 textarea.txt{min-height:70px;padding:8px 10px}
+.todo-tag{display:inline-block;margin-top:2px;font-size:12px;font-weight:600;color:var(--warn)}
 .echo-tag{display:inline-block;margin-top:2px;font-size:12px;font-weight:600;color:var(--good)}
 .reason{margin:0;font-size:14px;color:var(--crit);font-weight:500}
 .ver{font-family:var(--mono);font-size:11px;color:var(--muted)}
@@ -198,7 +199,7 @@ dialog::backdrop{background:rgba(0,0,0,.55)}
         <button class="btn small" id="copyCode" type="button">Copier pour le bloc-notes</button>
       </div>
     </div>
-    <p class="legal">Outil d'aide à la mesure, non certifié comme dispositif médical. Le radiologue reste seul responsable de l'interprétation. Les seuils affichés sont indicatifs. <span class="ver">Version 1.8</span></p>
+    <p class="legal">Outil d'aide à la mesure, non certifié comme dispositif médical. Le radiologue reste seul responsable de l'interprétation. Les seuils affichés sont indicatifs. <span class="ver">Version 1.9</span></p>
   </section>
 </div>
 
@@ -208,6 +209,10 @@ dialog::backdrop{background:rgba(0,0,0,.55)}
     <p class="hint">Stockées uniquement sur ce téléphone, noms masqués. Elles serviront à entraîner l'IA.</p>
     <input class="txt" id="histSearch" type="search" placeholder="Rechercher un code, un identifiant ou un âge" autocomplete="off">
     <ul class="hist" id="histList"></ul>
+    <div class="row" id="importRow">
+      <label class="btn small" for="importIn">Importer un lot (JSON)<input id="importIn" type="file" accept=".json,application/json" style="position:absolute;width:1px;height:1px;opacity:0"></label>
+      <button class="btn small" id="filterTodo" type="button" aria-pressed="false">À vérifier seulement</button>
+    </div>
     <div class="row" id="exportRow">
       <button class="btn small" id="exportBtn" type="button">Exporter les annotations (JSON)</button>
     </div>
@@ -477,7 +482,7 @@ $('#saveBtn').addEventListener('click',async()=>{
   const n={};for(const k in S.pts)n[k]=[+(S.pts[k].x/S.W).toFixed(5),+(S.pts[k].y/S.H).toFixed(5)];
   const prev=S.recordId?await tx('readonly',st=>st.get(S.recordId)).catch(()=>null):null;
   const code=prev?.code||await newCode();
-  const rec={id:S.recordId||('m'+Date.now().toString(36)),code,refInterne:$('#refInt').value.trim().slice(0,40),age:$('#ageIn').value?Math.round(+$('#ageIn').value):null,echo:prev?.echo||null,date:prev?.date||new Date().toISOString(),version:1,
+  const rec={id:S.recordId||('m'+Date.now().toString(36)),code,fichier:prev?.fichier||null,source:prev?.source||'manuel',verifie:true,refInterne:$('#refInt').value.trim().slice(0,40),age:$('#ageIn').value?Math.round(+$('#ageIn').value):null,echo:prev?.echo||null,date:prev?.date||new Date().toISOString(),version:1,
     profile:$('#profile').value,quality:{inspiration:$('#qInsp').checked,rotationAbsente:$('#qRot').checked,contoursVisibles:$('#qCont').checked},
     points:n,ict:+S.last.ict.toFixed(4),fiable:!S.last.blocked,alertes:S.last.alerts,width:S.W,height:S.H,image:maskedImage()};
   try{await tx('readwrite',st=>st.put(rec));S.recordId=rec.id;S.masks=[];
@@ -517,7 +522,7 @@ $('#echoForm').addEventListener('submit',async ev=>{ev.preventDefault();
   r.echo={cavites:cav,pericarde:$('#ePeri').checked,fevg:$('#eFevg').value?+$('#eFevg').value:null,date:$('#eDate').value||null,commentaire:$('#eCom').value.trim().slice(0,300),saisi:new Date().toISOString()};
   await tx('readwrite',st=>st.put(r));$('#echoDlg').close();renderHist();toast(`Résultat d'écho enregistré pour ${r.code}.`)});
 async function nextId(){
-  const list=(await all())||[];
+  const list=((await all())||[]).filter(r=>!r.fichier);
   const nums=list.map(r=>/^\d+$/.test((r.refInterne||'').trim())?+r.refInterne:0);
   return String(Math.max(list.length,...nums,0)+1);
 }
@@ -528,11 +533,14 @@ async function renderHist(){
   if(!list.length){const li=document.createElement('li');li.innerHTML='<span></span><span>Aucune mesure pour l\'instant. Chargez une photo, ajustez les points puis touchez « Enregistrer la mesure ».</span><span></span>';ul.appendChild(li);return}
   list.sort((a,b)=>b.date.localeCompare(a.date));
   const q=($('#histSearch').value||'').trim().toUpperCase();
-  const shown=q?list.filter(r=>(r.code||'').toUpperCase().includes(q)||(r.refInterne||'').toUpperCase().includes(q)||String(r.age??'')===q):list;
+  const todoOnly=$('#filterTodo').getAttribute('aria-pressed')==='true';
+  const base=todoOnly?list.filter(r=>r.verifie===false):list;
+  const nTodo=list.filter(r=>r.verifie===false).length;$('#filterTodo').textContent=`À vérifier seulement (${nTodo})`;
+  const shown=q?base.filter(r=>(r.code||'').toUpperCase().includes(q)||(r.refInterne||'').toUpperCase().includes(q)||(r.fichier||'').toUpperCase().includes(q)||String(r.age??'')===q):base;
   if(!shown.length){const li=document.createElement('li');li.innerHTML='<span></span><span>Aucun cas ne correspond à cette recherche.</span><span></span>';ul.appendChild(li);return}
   for(const r of shown){
     const li=document.createElement('li'),d=new Date(r.date);
-    li.innerHTML=`<img alt="" src="${r.image}"><div><b>${esc(r.code||'')} · ICT ${fmt(r.ict)}</b>${r.fiable?'':' <small style="display:inline;color:var(--crit)">non fiable</small>'}<small>${d.toLocaleDateString('fr-FR')} · Id. ${esc(r.refInterne||'–')} · ${r.age!=null?esc(r.age)+' ans':'âge –'}</small>${r.echo?`<span class="echo-tag">${esc(echoSummary(r.echo))}</span>`:''}<small>${d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})} · ${PROFILES[r.profile]?.name||''}</small></div><div class="row"><button class="btn small" data-open>Ouvrir</button><button class="btn small" data-echo>Écho</button><button class="btn small" data-del>Suppr.</button></div>`;
+    li.innerHTML=`<img alt="" src="${r.image}"><div><b>${esc(r.code||'')} · ICT ${fmt(r.ict)}</b>${r.fiable?'':' <small style="display:inline;color:var(--crit)">non fiable</small>'}<small>${d.toLocaleDateString('fr-FR')} · Id. ${esc(r.refInterne||'–')} · ${r.age!=null?esc(r.age)+' ans':'âge –'}</small>${r.verifie===false?'<span class="todo-tag">Points proposés par l\'IA : à vérifier</span>':''}${r.fichier?`<small>${esc(r.fichier)}</small>`:''}${r.echo?`<span class="echo-tag">${esc(echoSummary(r.echo))}</span>`:''}<small>${d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})} · ${PROFILES[r.profile]?.name||''}</small></div><div class="row"><button class="btn small" data-open>Ouvrir</button><button class="btn small" data-echo>Écho</button><button class="btn small" data-del>Suppr.</button></div>`;
     li.querySelector('[data-echo]').onclick=()=>openEcho(r.id);
     li.querySelector('[data-open]').onclick=()=>{const im=new Image();im.onload=()=>{const p={};for(const k in r.points)p[k]={x:r.points[k][0]*im.naturalWidth,y:r.points[k][1]*im.naturalHeight};$('#profile').value=r.profile;$('#qInsp').checked=r.quality.inspiration;$('#qRot').checked=r.quality.rotationAbsente;$('#qCont').checked=r.quality.contoursVisibles;setImage(im,{pts:p,recordId:r.id});$('#refInt').value=r.refInterne||'';$('#ageIn').value=r.age??'';showCode(r.code);$('#histDlg').close()};im.src=r.image};
     const del=li.querySelector('[data-del]');
@@ -544,6 +552,16 @@ $('#histBtn').addEventListener('click',()=>{renderHist();$('#histDlg').showModal
 $('#histSearch').addEventListener('input',()=>{clearTimeout(renderHist.t);renderHist.t=setTimeout(renderHist,150)});
 $('#helpBtn').addEventListener('click',()=>$('#helpDlg').showModal());
 document.querySelectorAll('[data-close]').forEach(b=>b.addEventListener('click',()=>b.closest('dialog').close()));
+$('#filterTodo').addEventListener('click',()=>{const b=$('#filterTodo');b.setAttribute('aria-pressed',b.getAttribute('aria-pressed')!=='true');renderHist()});
+$('#importIn').addEventListener('change',async e=>{
+  const f=e.target.files[0];e.target.value='';if(!f)return;
+  let data;try{data=JSON.parse(await f.text())}catch(err){toast("Ce fichier n'est pas un lot ICT Facile valide.");return}
+  const items=Array.isArray(data?.mesures)?data.mesures:[];if(!items.length){toast('Aucune radio dans ce fichier.');return}
+  const have=new Set(((await all())||[]).map(r=>r.id));let n=0;
+  for(const r of items){if(!r||!r.id||!r.image||!r.points||have.has(r.id))continue;
+    if(!r.code)r.code=await newCode();try{await tx('readwrite',st=>st.put(r));n++;have.add(r.id)}catch(err){}}
+  toast(n?`${n} radio(s) importée(s). Ouvrez chacune, corrigez les points, puis enregistrez.`:'Ces radios sont déjà dans votre historique.');renderHist();
+});
 if(isFramed){$('#exportRow').innerHTML='<p class="hint">L\'export des annotations est disponible dans l\'application installée sur le téléphone.</p>'}
 $('#exportBtn')?.addEventListener('click',async()=>{
   const list=await all();if(!list||!list.length){toast('Aucune mesure à exporter.');return}
